@@ -1,67 +1,152 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PulseCheck Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 min-h-screen">
-    <div class="max-w-6xl mx-auto px-4 py-8">
-        <div class="flex items-center justify-between mb-8">
-            <h1 class="text-3xl font-bold text-gray-800">PulseCheck</h1>
-            <span class="text-sm text-gray-500">{{ now()->format('M j, Y g:i A') }}</span>
+@extends('layouts.app')
+
+@section('content')
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p class="text-sm text-gray-500 mt-1">Overview of all monitored endpoints</p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">Total Endpoints</p>
+                    <p class="text-2xl font-bold text-gray-900 mt-1">{{ $total }}</p>
+                </div>
+                <div class="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                    </svg>
+                </div>
+            </div>
         </div>
-
-        <div class="grid gap-4">
-            @forelse($endpoints as $endpoint)
-                @php
-                    $latest = $endpoint->latestPingLog;
-                    $isUp = $latest && $latest->is_success;
-                @endphp
-                <div class="bg-white rounded-lg shadow p-6 border-l-4 {{ $isUp ? 'border-green-500' : 'border-red-500' }}">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h2 class="text-xl font-semibold text-gray-800">{{ $endpoint->name }}</h2>
-                            <p class="text-sm text-gray-500 mt-1">{{ $endpoint->url }}</p>
-                        </div>
-                        <div class="text-right">
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {{ $isUp ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                {{ $isUp ? 'UP' : 'DOWN' }}
-                            </span>
-                        </div>
-                    </div>
-
-                    @if($latest)
-                        <div class="mt-4 grid grid-cols-3 gap-4 text-sm">
-                            <div>
-                                <span class="text-gray-500">Status:</span>
-                                <span class="ml-1 font-medium">{{ $latest->status_code ?? 'N/A' }}</span>
-                            </div>
-                            <div>
-                                <span class="text-gray-500">Response:</span>
-                                <span class="ml-1 font-medium">{{ $latest->response_time_ms }}ms</span>
-                            </div>
-                            <div>
-                                <span class="text-gray-500">Pinged:</span>
-                                <span class="ml-1 font-medium">{{ $latest->pinged_at->diffForHumans() }}</span>
-                            </div>
-                        </div>
-                        @if(!$isUp && $latest->error_message)
-                            <div class="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
-                                {{ $latest->error_message }}
-                            </div>
-                        @endif
-                    @else
-                        <div class="mt-4 text-sm text-gray-400">Not yet pinged.</div>
-                    @endif
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">Up</p>
+                    <p class="text-2xl font-bold text-green-600 mt-1">{{ $up }}</p>
                 </div>
-            @empty
-                <div class="bg-white rounded-lg shadow p-8 text-center text-gray-500">
-                    No endpoints configured. Run <code class="bg-gray-100 px-2 py-1 rounded">php artisan db:seed</code> to add sample endpoints.
+                <div class="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
                 </div>
-            @endforelse
+            </div>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">Down</p>
+                    <p class="text-2xl font-bold text-red-600 mt-1">{{ $down }}</p>
+                </div>
+                <div class="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">Pending</p>
+                    <p class="text-2xl font-bold text-gray-400 mt-1">{{ $pending }}</p>
+                </div>
+                <div class="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">Avg Response</p>
+                    <p class="text-2xl font-bold text-gray-900 mt-1">{{ $avgResponseTime ? round($avgResponseTime) . 'ms' : 'N/A' }}</p>
+                </div>
+                <div class="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            </div>
         </div>
     </div>
-</body>
-</html>
+
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-gray-900">Endpoints</h2>
+        <a href="{{ route('endpoints.create') }}"
+           class="inline-flex items-center gap-1.5 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            Add Endpoint
+        </a>
+    </div>
+
+    @forelse($endpoints as $endpoint)
+        @php
+            $latest = $endpoint->latestPingLog;
+            $isUp = $latest && $latest->is_success;
+        @endphp
+        <a href="{{ route('endpoints.show', $endpoint) }}"
+           class="block bg-white rounded-xl border border-gray-200 p-5 mb-3 hover:shadow-md transition-shadow border-l-4 {{ $isUp ? 'border-l-green-500' : ($latest ? 'border-l-red-500' : 'border-l-gray-300') }}">
+            <div class="flex items-center justify-between">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-3">
+                        <h3 class="text-base font-semibold text-gray-900 truncate">{{ $endpoint->name }}</h3>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                            {{ $isUp ? 'bg-green-100 text-green-800' : ($latest ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-500') }}">
+                            {{ $isUp ? 'UP' : ($latest ? 'DOWN' : 'PENDING') }}
+                        </span>
+                        @unless($endpoint->is_active)
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                Disabled
+                            </span>
+                        @endunless
+                    </div>
+                    <p class="text-sm text-gray-500 mt-1 truncate">{{ $endpoint->url }}</p>
+                </div>
+                <div class="flex items-center gap-6 text-sm text-gray-500 ml-4 flex-shrink-0">
+                    @if($latest)
+                        <div class="text-center">
+                            <p class="font-semibold text-gray-900">{{ $latest->status_code ?? 'N/A' }}</p>
+                            <p class="text-xs">Status</p>
+                        </div>
+                        <div class="text-center">
+                            <p class="font-semibold text-gray-900">{{ $latest->response_time_ms }}ms</p>
+                            <p class="text-xs">Response</p>
+                        </div>
+                        <div class="text-center">
+                            <p class="font-semibold text-gray-900">{{ $latest->pinged_at->diffForHumans() }}</p>
+                            <p class="text-xs">Last Ping</p>
+                        </div>
+                    @else
+                        <p class="text-gray-400">No data yet</p>
+                    @endif
+                </div>
+            </div>
+            @if($latest && !$isUp && $latest->error_message)
+                <div class="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+                    {{ $latest->error_message }}
+                </div>
+            @endif
+        </a>
+    @empty
+        <div class="bg-white rounded-xl border border-gray-200 p-12 text-center">
+            <svg class="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+            </svg>
+            <h3 class="text-lg font-medium text-gray-900 mb-1">No endpoints yet</h3>
+            <p class="text-sm text-gray-500 mb-4">Get started by adding your first endpoint to monitor.</p>
+            <a href="{{ route('endpoints.create') }}"
+               class="inline-flex items-center gap-1.5 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Add Your First Endpoint
+            </a>
+        </div>
+    @endforelse
+@endsection

@@ -13,7 +13,10 @@ class MonitorEndpointsCommand extends Command
 
     public function handle()
     {
-        $endpoints = Endpoint::active()->get();
+        $endpoints = Endpoint::active()->get()->filter(
+            fn (Endpoint $endpoint) => is_null($endpoint->last_pinged_at)
+                || $endpoint->last_pinged_at->lte(now()->subMinutes($endpoint->interval_minutes))
+        );
 
         if ($endpoints->isEmpty()) {
             $this->info('No active endpoints found.');

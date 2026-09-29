@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Endpoint;
 use App\Models\PingLog;
+use App\Models\User;
 use App\Notifications\EndpointDownAlert;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -11,6 +12,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Notification;
 
 class PingEndpointJob implements ShouldQueue
 {
@@ -56,7 +58,10 @@ class PingEndpointJob implements ShouldQueue
 
         if (!$isSuccess) {
             try {
-                $this->endpoint->notify(new EndpointDownAlert($statusCode, $errorMessage));
+                $users = User::all();
+                if ($users->isNotEmpty()) {
+                    Notification::send($users, new EndpointDownAlert($this->endpoint, $statusCode, $errorMessage));
+                }
             } catch (\Exception $e) {
                 // notification failed silently
             }
