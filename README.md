@@ -1,35 +1,23 @@
 # PulseCheck
 
-A lightweight uptime and endpoint monitoring app built with Laravel. Register endpoints, poll them on a schedule, log response times, and get emailed when something goes down.
+PulseCheck watches a list of URLs and emails you when one of them stops responding. It's a Laravel app, and it doesn't try to be anything else.
 
-## Features
+You add an endpoint, tell it how often to check, and the scheduler takes it from there. Every ping gets logged with its status code and how long the response took. When a check fails you get an email about it, and so does everyone else on the app.
 
-- **User auth** — register, login, logout (session-based).
-- **Endpoint CRUD** — name, URL, HTTP method, expected status code, timeout, check interval, active toggle.
-- **Scheduled checks** — `pulse:check` runs every minute and dispatches a ping job for any active endpoint whose interval has elapsed.
-- **Queued pings** — each check runs as `PingEndpointJob`, so slow targets don't block the scheduler.
-- **Ping logging** — status code, response time (ms), success flag, and error message stored per check.
-- **Down alerts** — on a failed check, every user gets an `EndpointDownAlert` email with a link to the dashboard.
-- **Dashboard** — endpoint overview with latest status and recent history.
+## What it does
 
-## Tech stack
+- Register, login, logout. It's plain session auth, so there's no package sitting underneath it.
+- Full CRUD on endpoints: URL, HTTP method, expected status code, timeout, how often to check, and an on/off toggle.
+- `pulse:check` is the artisan command your scheduler fires every minute. It works out which endpoints are actually due, then queues a job for each one. Anything that isn't due gets skipped entirely.
+- `PingEndpointJob` makes the request, times it, and writes a `PingLog` row with the status code, the response time in ms, whether it passed, and the error message if it threw.
+- On a failed check it sends `EndpointDownAlert` to every user. That mail call sits inside a try/catch, so a botched SMTP config won't take the check down with it.
+- A dashboard showing where each endpoint stands right now.
 
-| Layer | Choice |
-| --- | --- |
-| Framework | Laravel 9 (PHP ^8.0) |
-| Database | MySQL (configurable) |
-| Queue | `sync` by default, `database` driver supported |
-| Frontend | Blade + Tailwind CSS 3 + Alpine.js |
-| Build | Laravel Mix 6 / Webpack |
+## The stack
 
-## Requirements
+Laravel 9 on PHP 8+, MySQL, and Blade views with Tailwind 3 and Alpine.js, built through Laravel Mix. The queue runs on `sync` out of the box, which is why you don't need a worker to get going.
 
-- PHP 8.0+
-- Composer
-- Node.js 16+ and npm
-- MySQL (or any Laravel-supported database)
-
-## Installation
+## Getting it running
 
 ```bash
 git clone https://github.com/TakbirZaman/PulseCheck.git
@@ -42,83 +30,69 @@ cp .env.example .env
 php artisan key:generate
 ```
 
-Edit `.env` with your database credentials, then:
+Drop your database credentials into `.env`, then run:
 
 ```bash
 php artisan migrate --seed
 npm run dev
 ```
 
-`db:seed` loads `EndpointSeeder` with a few sample endpoints.
+The seeder gives you a handful of sample endpoints, so you've got something to look at before you add your own.
 
-## Running
-
-Terminal 1 — the app:
+After that you'll want a couple of terminals open:
 
 ```bash
-php artisan serve
+php artisan serve          # the app, http://localhost:8000
+php artisan schedule:work  # drives pulse:check once a minute
+php artisan queue:work     # only if you change the queue driver
 ```
 
-Terminal 2 — the scheduler (drives `pulse:check` every minute):
-
-```bash
-php artisan schedule:work
-```
-
-Terminal 3 — the queue worker, only needed if you switch to an async driver:
-
-```bash
-# in .env: QUEUE_CONNECTION=database
-php artisan queue:work
-```
-
-With the default `QUEUE_CONNECTION=sync`, jobs run inline during the scheduler tick, so no worker is required.
-
-Open http://localhost:8000.
+You can skip that last one. With `QUEUE_CONNECTION=sync` your jobs run inline during the scheduler tick, and there's nothing for a worker to pick up. If you switch to `QUEUE_CONNECTION=database` in `.env`, the worker does become required, though you won't need to build the table yourself because there's already a `jobs` migration in here.
 
 ## Routes
 
-| Method | URI | Name | Notes |
+| Method | URI | Name | Access |
 | --- | --- | --- | --- |
-| GET | `/` | — | Redirects to dashboard |
-| GET/POST | `/login` | `login` | Guest |
-| GET/POST | `/register` | `register` | Guest |
-| POST | `/logout` | `logout` | Auth |
-| GET | `/dashboard` | `dashboard` | Auth |
-| GET | `/endpoints` | `endpoints.index` | Auth |
-| GET | `/endpoints/create` | `endpoints.create` | Auth |
-| POST | `/endpoints` | `endpoints.store` | Auth |
-| GET | `/endpoints/{endpoint}` | `endpoints.show` | Auth |
-| GET/PUT/PATCH/DELETE | `/endpoints/{endpoint}` | `endpoints.edit/update/destroy` | Auth |
-| PATCH | `/endpoints/{endpoint}/toggle` | `endpoints.toggle` | Auth |
+| GET | `/` | none | redirects to dashboard |
+| GET, POST | `/login` | `login` | guests |
+| GET, POST | `/register` | `register` | guests |
+| POST | `/logout` | `logout` | logged in |
+| GET | `/dashboard` | `dashboard` | logged in |
+| GET | `/endpoints` | `endpoints.index` | logged in |
+| GET | `/endpoints/create` | `endpoints.create` | logged in |
+| POST | `/endpoints` | `endpoints.store` | logged in |
+| GET | `/endpoints/{endpoint}` | `endpoints.show` | logged in |
+| GET, PUT, PATCH, DELETE | `/endpoints/{endpoint}` | `endpoints.edit`, `update`, `destroy` | logged in |
+| PATCH | `/endpoints/{endpoint}/toggle` | `endpoints.toggle` | logged in |
 
-## How a check works
+## What happens when a check runs
 
-1. `app/Console/Kernel.php` schedules `pulse:check` every minute.
-2. `MonitorEndpointsCommand` selects active endpoints where `last_pinged_at` is null or older than `interval_minutes`.
-3. Each endpoint gets a `PingEndpointJob` dispatched.
-4. The job sends the request with the endpoint's method and timeout, measures response time, and writes a `PingLog`.
-5. If the status code doesn't match `expected_status_code` (or the request throws), `EndpointDownAlert` is mailed to all users.
+1. `app/Console/Kernel.php` schedules `pulse:check` on a `->everyMinute()` cadence.
+2. The command pulls the active endpoints whose `last_pinged_at` is either null or older than their `interval_minutes`.
+3. Each one gets a `PingEndpointJob` dispatched, so you end up with one job per endpoint that's due.
+4. The job sends the request with your endpoint's own method and timeout, measures the elapsed time, and writes the `PingLog`.
+5. If the status code doesn't match `expected_status_code`, or the request threw, `EndpointDownAlert` goes out by mail.
 
-## Project structure
+## Where things live
 
 ```
-app/
-  Console/Commands/MonitorEndpointsCommand.php   # pulse:check
-  Jobs/PingEndpointJob.php                       # single HTTP check
-  Http/Controllers/                              # Auth, Dashboard, Endpoint
-  Models/                                        # User, Endpoint, PingLog
-  Notifications/EndpointDownAlert.php            # down email
-database/migrations/                             # users, endpoints, ping_logs, jobs
-resources/views/                                 # Blade templates (Tailwind)
-routes/web.php                                   # all web routes
+app/Console/Commands/MonitorEndpointsCommand.php   pulse:check
+app/Jobs/PingEndpointJob.php                       the single HTTP check
+app/Http/Controllers/                              Auth, Dashboard, Endpoint
+app/Models/                                        User, Endpoint, PingLog
+app/Notifications/EndpointDownAlert.php            the down email
+database/migrations/                               users, endpoints, ping_logs, jobs
+resources/views/                                   Blade templates
+routes/web.php                                     every web route
 ```
 
-## Testing
+## Tests
 
 ```bash
 php artisan test
 ```
+
+Fair warning, it's still the stock example tests that come with a fresh Laravel app. I haven't written coverage for the ping logic yet, so don't lean on these.
 
 ## License
 
